@@ -6,10 +6,10 @@ const insertPending = async (tx) => {
   const r = await pool.request()
     .input('order_id', sql.NVarChar(64), tx.order_id)
     .input('request_id', sql.NVarChar(64), tx.request_id || null)
-    .input('user_id', sql.NVarChar(64), tx.user_id)
-    .input('amount', sql.BigInt, tx.amount)
+    .input('user_id', sql.Int, tx.user_id)
+    .input('amount', sql.Int, tx.amount)
     .input('status', sql.NVarChar(16), 'pending')
-    .input('extra_data', sql.NVarChar(sql.MAX), tx.extra_data || null)
+    .input('extra_data', sql.NVarChar(500), tx.extra_data || null)
     .input('signature', sql.NVarChar(256), tx.signature || null)
     .query(`
       INSERT INTO dbo.Transactions(order_id, request_id, user_id, amount, status, extra_data, signature)

@@ -127,9 +127,12 @@ exports.createMomoPayment = async (req, res) => {
 
     // Trả cho FE link thanh toán (payUrl/qrCodeUrl)
     return res.json({
-      payUrl: momoRes.data?.payUrl || momoRes.data?.deeplink,
-      qrCodeUrl: momoRes.data?.qrCodeUrl,
-      orderId
+      momo: {                   // ✅ bọc lại cho khớp FE
+        payUrl: momoRes.data?.payUrl || momoRes.data?.deeplink,
+        qrCodeUrl: momoRes.data?.qrCodeUrl,
+        orderId,
+        requestId
+      }
     });
   } catch (err) {
     // Nếu MoMo call fail, cân nhắc markFailed (tùy bạn muốn giữ pending để retry hay không)
