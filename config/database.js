@@ -7,10 +7,10 @@ const dbConfig = {
   database: process.env.DB_DATABASE || 'HomeHelperDB',
   user: process.env.DB_USER || 'sa',
   password: process.env.DB_PASSWORD || 'Minh123',
-  port: parseInt(process.env.DB_PORT) || 1433,
+  port: parseInt(process.env.DB_PORT || '1433', 10),
   options: {
-    encrypt: false,
-    trustServerCertificate: true
+    encrypt: true,
+    trustServerCertificate: false
   },
   pool: {
     max: 10,
