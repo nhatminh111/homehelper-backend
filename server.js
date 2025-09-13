@@ -54,6 +54,7 @@ app.use('/api/conversations', require('./routes/conversations'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/users', require('./routes/users'));
+app.use('/api/blogs', require('./routes/blogs'));
 // app.use('/api/users', require('./routes/users'));
 // app.use('/api/services', require('./routes/services'));
 // app.use('/api/bookings', require('./routes/bookings'));
@@ -95,8 +96,8 @@ const PORT = process.env.PORT || 3001;
 
 async function startServer() {
   try {
-    // Kết nối database - tạm thời comment out để test
-    // await connectDB();
+    // Kết nối database
+    await connectDB();
     
     // Khởi động server
     server.listen(PORT, () => {

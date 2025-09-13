@@ -214,7 +214,7 @@ class MessageController {
     try {
       const { conversationId } = req.params;
       const userId = req.user.user_id;
-      const { content, reply_to_message_id } = req.body;
+  const { content } = req.body;
 
       // Kiểm tra user có trong cuộc trò chuyện không
       const isParticipant = await Conversation.isParticipant(conversationId, userId);
@@ -241,8 +241,7 @@ class MessageController {
         message_type,
         file_url: `/uploads/${file.filename}`,
         file_name: file.originalname,
-        file_size: file.size,
-        reply_to_message_id
+        file_size: file.size
       };
 
       const message = await Message.create(messageData);

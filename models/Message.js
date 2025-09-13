@@ -4,16 +4,16 @@ class Message {
   // Tạo tin nhắn mới
   static async create(messageData) {
     try {
-      const { conversation_id, sender_id, content, message_type = 'text', file_url, file_name, file_size, reply_to_message_id } = messageData;
+  const { conversation_id, sender_id, content, message_type = 'text', file_url, file_name, file_size } = messageData;
       
       const query = `
-        INSERT INTO Messages (conversation_id, sender_id, content, message_type, file_url, file_name, file_size, reply_to_message_id, created_at, updated_at)
-        VALUES (@param1, @param2, @param3, @param4, @param5, @param6, @param7, @param8, GETDATE(), GETDATE());
+        INSERT INTO Messages (conversation_id, sender_id, content, message_type, file_url, file_name, file_size, created_at, updated_at)
+        VALUES (@param1, @param2, @param3, @param4, @param5, @param6, @param7, GETDATE(), GETDATE());
         
         SELECT SCOPE_IDENTITY() AS message_id;
       `;
       
-      const params = [conversation_id, sender_id, content, message_type, file_url, file_name, file_size, reply_to_message_id];
+      const params = [conversation_id, sender_id, content, message_type, file_url, file_name, file_size];
       const result = await executeQuery(query, params);
       
       const messageId = result.recordset[0].message_id;
@@ -31,14 +31,9 @@ class Message {
         SELECT m.*, 
                u.name as sender_name,
                u.email as sender_email,
-               u.role as sender_role,
-               reply.content as reply_content,
-               reply.sender_id as reply_sender_id,
-               reply_sender.name as reply_sender_name
+               u.role as sender_role
         FROM Messages m
         LEFT JOIN Users u ON m.sender_id = u.user_id
-        LEFT JOIN Messages reply ON m.reply_to_message_id = reply.message_id
-        LEFT JOIN Users reply_sender ON reply.sender_id = reply_sender.user_id
         WHERE m.message_id = @param1 AND m.is_deleted = 0
       `;
       
@@ -69,35 +64,32 @@ class Message {
       }
 
       const offset = (page - 1) * limit;
-      
-      const query = `
+
+      // Query 1: Get paginated messages
+      const messagesQuery = `
         SELECT m.*, 
                u.name as sender_name,
                u.email as sender_email,
-               u.role as sender_role,
-               reply.content as reply_content,
-               reply.sender_id as reply_sender_id,
-               reply_sender.name as reply_sender_name
+               u.role as sender_role
         FROM Messages m
         LEFT JOIN Users u ON m.sender_id = u.user_id
-        LEFT JOIN Messages reply ON m.reply_to_message_id = reply.message_id
-        LEFT JOIN Users reply_sender ON reply.sender_id = reply_sender.user_id
         ${whereClause}
         ORDER BY m.created_at DESC
-        OFFSET @param${paramIndex} ROWS
-        FETCH NEXT @param${paramIndex + 1} ROWS ONLY;
-        
+        OFFSET ${offset} ROWS
+        FETCH NEXT ${limit} ROWS ONLY;
+      `;
+      const messagesResult = await executeQuery(messagesQuery, params);
+      const messages = messagesResult.recordset.reverse(); // Reverse để có thứ tự từ cũ đến mới
+
+      // Query 2: Get total count
+      const countQuery = `
         SELECT COUNT(*) AS total
         FROM Messages m
         ${whereClause};
       `;
-      
-      params.push(offset, limit);
-      const result = await executeQuery(query, params);
-      
-      const messages = result.recordset.slice(0, -1).reverse(); // Reverse để có thứ tự từ cũ đến mới
-      const total = result.recordset[result.recordset.length - 1].total;
-      
+      const countResult = await executeQuery(countQuery, params);
+      const total = countResult.recordset[0].total;
+
       return {
         messages,
         total,
@@ -150,8 +142,8 @@ class Message {
           AND m.is_deleted = 0
           AND m.content LIKE '%' + @param2 + '%'
         ORDER BY m.created_at DESC
-        OFFSET @param3 ROWS
-        FETCH NEXT @param4 ROWS ONLY;
+  OFFSET ${offset} ROWS
+  FETCH NEXT ${limit} ROWS ONLY;
         
         SELECT COUNT(*) AS total
         FROM Messages m
@@ -160,7 +152,7 @@ class Message {
           AND m.content LIKE '%' + @param2 + '%';
       `;
       
-      const result = await executeQuery(query, [conversationId, searchTerm, offset, limit]);
+  const result = await executeQuery(query, [conversationId, searchTerm]);
       
       const messages = result.recordset.slice(0, -1);
       const total = result.recordset[result.recordset.length - 1].total;
