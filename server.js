@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const http = require('http');
 const { Server } = require('socket.io');
+const axios = require('axios');
 require('dotenv').config();
 
 const { connectDB } = require('./config/database');
@@ -49,6 +50,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/uploads', express.static('uploads'));
 
 // Routes
+app.use('/api/momo', require('./routes/momo'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/conversations', require('./routes/conversations'));
 app.use('/api/messages', require('./routes/messages'));
