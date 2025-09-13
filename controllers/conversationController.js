@@ -363,7 +363,7 @@ class ConversationController {
         return res.status(400).json({ error: 'conversationId không hợp lệ' });
       }
       const userId = req.user.user_id || req.user.userId;
-      const { content, message_type = 'text', reply_to_message_id } = req.body;
+  const { content, message_type = 'text' } = req.body;
 
       // Kiểm tra user có trong cuộc trò chuyện không
       const isParticipant = await Conversation.isParticipant(convId, userId);
@@ -377,8 +377,7 @@ class ConversationController {
         conversation_id: convId,
         sender_id: userId,
         content: content ? content.trim() : '',
-        message_type,
-        reply_to_message_id
+        message_type
       };
 
       // Nếu có file được upload

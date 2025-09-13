@@ -7,7 +7,7 @@ const Notification = require('../models/Notification');
 class SocketHandler {
   constructor(io) {
     this.io = io;
-    this.connectedUsers = new Map(); // Map<userId, socketId>
+    this.connectedUsers = new Map(); // Map<userId, Set<socketId>>
     this.userSockets = new Map(); // Map<socketId, userId>
     this.typingUsers = new Map(); // Map<conversationId, Set<userId>>
     this.joinedRooms = new Map(); // Map<socketId, Set<roomName>>
@@ -27,7 +27,6 @@ class SocketHandler {
           return next(new Error('Không có token xác thực'));
         }
 
-        // Phải dùng đúng cùng JWT_SECRET với authController để tránh sai lệch sau đăng nhập
         if (!process.env.JWT_SECRET) {
           return next(new Error('JWT_SECRET chưa được cấu hình'));
         }
@@ -52,35 +51,28 @@ class SocketHandler {
   // Thiết lập các event handlers
   setupEventHandlers() {
     this.io.on('connection', (socket) => {
-      
       // Lưu thông tin kết nối
-      this.connectedUsers.set(socket.userId, socket.id);
+      if (!this.connectedUsers.has(socket.userId)) {
+        this.connectedUsers.set(socket.userId, new Set());
+      }
+      this.connectedUsers.get(socket.userId).add(socket.id);
       this.userSockets.set(socket.id, socket.userId);
       this.joinedRooms.set(socket.id, new Set());
 
       // Gửi thông báo user online
       this.broadcastUserStatus(socket.userId, 'online');
 
-      // Event: Join conversation room
+      // Gửi danh sách user online hiện tại
+      this.io.emit('online_users', this.getOnlineUsers());
+
+      // Đăng ký events
       socket.on('join_conversation', (data) => this.handleJoinConversation(socket, data));
-      
-      // Event: Leave conversation room
       socket.on('leave_conversation', (data) => this.handleLeaveConversation(socket, data));
-      
-      // Event: Send message
       socket.on('send_message', (data) => this.handleSendMessage(socket, data));
-      
-      // Event: Typing indicator
       socket.on('typing_start', (data) => this.handleTypingStart(socket, data));
       socket.on('typing_stop', (data) => this.handleTypingStop(socket, data));
-      
-      // Event: Message read
       socket.on('message_read', (data) => this.handleMessageRead(socket, data));
-      
-      // Event: Notification read
       socket.on('notification_read', (data) => this.handleNotificationRead(socket, data));
-      
-      // Event: Disconnect
       socket.on('disconnect', () => this.handleDisconnect(socket));
     });
   }
@@ -89,37 +81,30 @@ class SocketHandler {
   async handleJoinConversation(socket, data) {
     try {
       const { conversationId } = data;
-      
       if (!conversationId) {
         socket.emit('error', { message: 'Thiếu conversationId' });
         return;
       }
 
-      // Kiểm tra user có trong cuộc trò chuyện không
       const isParticipant = await Conversation.isParticipant(conversationId, socket.userId);
       if (!isParticipant) {
-        socket.emit('error', { message: 'Bạn không có quyền truy cập cuộc trò chuyện này' });
+        socket.emit('error', { message: 'Bạn không có quyền vào cuộc trò chuyện này' });
         return;
       }
 
-      // Join room
       const room = `conversation_${conversationId}`;
       const rooms = this.joinedRooms.get(socket.id) || new Set();
-      if (rooms.has(room)) {
-        return; // tránh join trùng
-      }
-      socket.join(room);
-      rooms.add(room);
-      this.joinedRooms.set(socket.id, rooms);
-      
-      // Gửi thông báo user đã join
-      socket.to(`conversation_${conversationId}`).emit('user_joined', {
-        userId: socket.userId,
-        userName: socket.user.name,
-        conversationId
-      });
+      if (!rooms.has(room)) {
+        socket.join(room);
+        rooms.add(room);
+        this.joinedRooms.set(socket.id, rooms);
 
-      
+        socket.to(room).emit('user_joined', {
+          userId: socket.userId,
+          userName: socket.user.name,
+          conversationId
+        });
+      }
     } catch (error) {
       console.error('Lỗi join conversation:', error);
       socket.emit('error', { message: 'Lỗi join conversation' });
@@ -130,33 +115,23 @@ class SocketHandler {
   async handleLeaveConversation(socket, data) {
     try {
       const { conversationId } = data;
-      
-      if (!conversationId) {
-        socket.emit('error', { message: 'Thiếu conversationId' });
-        return;
-      }
+      if (!conversationId) return;
 
-      // Leave room
       const room = `conversation_${conversationId}`;
       const rooms = this.joinedRooms.get(socket.id) || new Set();
-      if (!rooms.has(room)) {
-        return; // đã rời trước đó
-      }
-      socket.leave(room);
-      rooms.delete(room);
-      this.joinedRooms.set(socket.id, rooms);
-      
-      // Gửi thông báo user đã leave
-      socket.to(`conversation_${conversationId}`).emit('user_left', {
-        userId: socket.userId,
-        userName: socket.user.name,
-        conversationId
-      });
+      if (rooms.has(room)) {
+        socket.leave(room);
+        rooms.delete(room);
+        this.joinedRooms.set(socket.id, rooms);
 
-      
+        socket.to(room).emit('user_left', {
+          userId: socket.userId,
+          userName: socket.user.name,
+          conversationId
+        });
+      }
     } catch (error) {
       console.error('Lỗi leave conversation:', error);
-      socket.emit('error', { message: 'Lỗi leave conversation' });
     }
   }
 
@@ -164,91 +139,78 @@ class SocketHandler {
   async handleSendMessage(socket, data) {
     try {
       const { conversationId, content, messageType = 'text', replyToMessageId } = data;
-      
       if (!conversationId || !content) {
         socket.emit('error', { message: 'Thiếu thông tin bắt buộc' });
         return;
       }
 
-      // Kiểm tra user có trong cuộc trò chuyện không
       const isParticipant = await Conversation.isParticipant(conversationId, socket.userId);
       if (!isParticipant) {
-        socket.emit('error', { message: 'Bạn không có quyền gửi tin nhắn trong cuộc trò chuyện này' });
+        socket.emit('error', { message: 'Bạn không có quyền gửi tin nhắn' });
         return;
       }
 
-      // Tạo tin nhắn
       const messageData = {
         conversation_id: conversationId,
         sender_id: socket.userId,
         content: content.trim(),
         message_type: messageType,
-        reply_to_message_id: replyToMessageId
+        reply_to_message_id: replyToMessageId || null
       };
-
       const message = await Message.create(messageData);
 
-      // Gửi tin nhắn đến tất cả user trong room
-      this.io.to(`conversation_${conversationId}`).emit('new_message', {
+      // Gửi lại cho chính người gửi
+      socket.emit('new_message', { message, conversationId });
+
+      // Gửi đến các user khác trong phòng
+      socket.broadcast.to(`conversation_${conversationId}`).emit('new_message', {
         message,
         conversationId
       });
 
-      // Lấy danh sách participants để gửi thông báo
+      // Gửi notification cho các user khác
       const conversation = await Conversation.findById(conversationId);
       const otherParticipants = conversation.participants
         .filter(p => p.user_id !== socket.userId)
         .map(p => p.user_id);
 
-      // Tạo thông báo cho các participants khác
       for (const participantId of otherParticipants) {
         try {
-          await Notification.createMessageNotification(
-            conversationId,
-            socket.userId,
-            participantId,
-            content
-          );
+          await Notification.createMessageNotification(conversationId, socket.userId, participantId, content);
 
-          // Gửi thông báo real-time nếu user đang online
-          const participantSocketId = this.connectedUsers.get(participantId);
-          if (participantSocketId) {
-            this.io.to(participantSocketId).emit('new_notification', {
-              type: 'message',
-              conversationId,
-              senderId: socket.userId,
-              senderName: socket.user.name,
-              content: content.length > 100 ? content.substring(0, 100) + '...' : content
+          const sockets = this.connectedUsers.get(participantId);
+          if (sockets) {
+            sockets.forEach(sid => {
+              this.io.to(sid).emit('new_notification', {
+                type: 'message',
+                conversationId,
+                senderId: socket.userId,
+                senderName: socket.user.name,
+                content: content.length > 100 ? content.substring(0, 100) + '...' : content
+              });
             });
           }
-        } catch (notificationError) {
-          console.error('Lỗi tạo thông báo:', notificationError);
+        } catch (err) {
+          console.error('Lỗi tạo notification:', err);
         }
       }
-
-      
     } catch (error) {
       console.error('Lỗi gửi tin nhắn:', error);
       socket.emit('error', { message: 'Lỗi gửi tin nhắn' });
     }
   }
 
-  // Xử lý typing start
+  // Typing start
   handleTypingStart(socket, data) {
     try {
       const { conversationId } = data;
-      
-      if (!conversationId) {
-        return;
-      }
+      if (!conversationId) return;
 
-      // Thêm user vào danh sách đang typing
       if (!this.typingUsers.has(conversationId)) {
         this.typingUsers.set(conversationId, new Set());
       }
       this.typingUsers.get(conversationId).add(socket.userId);
 
-      // Gửi thông báo typing đến các user khác trong room
       socket.to(`conversation_${conversationId}`).emit('user_typing', {
         userId: socket.userId,
         userName: socket.user.name,
@@ -256,35 +218,25 @@ class SocketHandler {
         isTyping: true
       });
 
-      // Tự động dừng typing sau 3 giây
-      setTimeout(() => {
-        this.handleTypingStop(socket, { conversationId });
-      }, 3000);
+      setTimeout(() => this.handleTypingStop(socket, { conversationId }), 3000);
     } catch (error) {
       console.error('Lỗi typing start:', error);
     }
   }
 
-  // Xử lý typing stop
+  // Typing stop
   handleTypingStop(socket, data) {
     try {
       const { conversationId } = data;
-      
-      if (!conversationId) {
-        return;
-      }
+      if (!conversationId) return;
 
-      // Xóa user khỏi danh sách đang typing
       if (this.typingUsers.has(conversationId)) {
         this.typingUsers.get(conversationId).delete(socket.userId);
-        
-        // Nếu không còn ai typing, xóa conversation khỏi map
         if (this.typingUsers.get(conversationId).size === 0) {
           this.typingUsers.delete(conversationId);
         }
       }
 
-      // Gửi thông báo dừng typing đến các user khác trong room
       socket.to(`conversation_${conversationId}`).emit('user_typing', {
         userId: socket.userId,
         userName: socket.user.name,
@@ -296,115 +248,81 @@ class SocketHandler {
     }
   }
 
-  // Xử lý message read
+  // Message read
   async handleMessageRead(socket, data) {
     try {
       const { conversationId } = data;
-      
-      if (!conversationId) {
-        return;
-      }
+      if (!conversationId) return;
 
-      // Throttle read events để tránh spam log/sự kiện
       const key = `${socket.userId}:${conversationId}`;
       const now = Date.now();
       const last = this.readThrottle.get(key) || 0;
-      // Throttle mạnh hơn: tối đa 1 lần / 5s cho mỗi user-conversation
-      if (now - last < 5000) {
-        return;
-      }
+      if (now - last < 5000) return;
       this.readThrottle.set(key, now);
 
-      // Cập nhật thời gian đọc cuối
       await Conversation.updateLastRead(conversationId, socket.userId);
 
-      // Gửi thông báo đã đọc đến các user khác
       socket.to(`conversation_${conversationId}`).emit('message_read', {
         userId: socket.userId,
         userName: socket.user.name,
         conversationId,
         readAt: new Date()
       });
-      // Không log để tránh spam terminal
     } catch (error) {
       console.error('Lỗi message read:', error);
     }
   }
 
-  // Xử lý notification read
+  // Notification read
   async handleNotificationRead(socket, data) {
     try {
       const { notificationId } = data;
-      
-      if (!notificationId) {
-        return;
-      }
-
-      // Đánh dấu thông báo đã đọc
+      if (!notificationId) return;
       await Notification.markAsRead(notificationId);
-
-      
     } catch (error) {
       console.error('Lỗi notification read:', error);
     }
   }
 
-  // Xử lý disconnect
+  // Disconnect
   handleDisconnect(socket) {
     try {
-      
-      
-      // Xóa khỏi danh sách kết nối
-      this.connectedUsers.delete(socket.userId);
-      this.userSockets.delete(socket.id);
-
-      // Gửi thông báo user offline
-      this.broadcastUserStatus(socket.userId, 'offline');
-
-      // Xóa khỏi tất cả typing sessions
-      for (const [conversationId, typingSet] of this.typingUsers.entries()) {
-        if (typingSet.has(socket.userId)) {
-          typingSet.delete(socket.userId);
-          if (typingSet.size === 0) {
-            this.typingUsers.delete(conversationId);
-          }
+      const userId = socket.userId;
+      const sockets = this.connectedUsers.get(userId);
+      if (sockets) {
+        sockets.delete(socket.id);
+        if (sockets.size === 0) {
+          this.connectedUsers.delete(userId);
+          this.broadcastUserStatus(userId, 'offline');
         }
       }
+      this.userSockets.delete(socket.id);
+      this.io.emit('online_users', this.getOnlineUsers());
     } catch (error) {
       console.error('Lỗi disconnect:', error);
     }
   }
 
-  // Broadcast user status
+  // Helpers
   broadcastUserStatus(userId, status) {
-    this.io.emit('user_status_changed', {
-      userId,
-      status,
-      timestamp: new Date()
-    });
+    this.io.emit('user_status_changed', { userId, status, timestamp: new Date() });
   }
 
-  // Gửi thông báo đến user cụ thể
   sendNotificationToUser(userId, notification) {
-    const socketId = this.connectedUsers.get(userId);
-    if (socketId) {
-      this.io.to(socketId).emit('new_notification', notification);
+    const sockets = this.connectedUsers.get(userId);
+    if (sockets) {
+      sockets.forEach(sid => this.io.to(sid).emit('new_notification', notification));
     }
   }
 
-  // Gửi thông báo đến nhiều user
   sendNotificationToUsers(userIds, notification) {
-    userIds.forEach(userId => {
-      this.sendNotificationToUser(userId, notification);
-    });
+    userIds.forEach(uid => this.sendNotificationToUser(uid, notification));
   }
 
-  // Lấy danh sách user đang online
   getOnlineUsers() {
     return Array.from(this.connectedUsers.keys());
   }
 
-  // Kiểm tra user có online không
   isUserOnline(userId) {
     return this.connectedUsers.has(userId);
   }

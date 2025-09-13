@@ -19,26 +19,61 @@ const db = new sqlite3.Database(dbPath, (err) => {
 
 // Hàm tạo các bảng cần thiết
 function createTables() {
-  const createUsersTable = `
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL,
-      role TEXT DEFAULT 'Customer',
-      phone TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `;
+  const fs = require('fs');
+  const path = require('path');
+  
+  // Đọc file SQL setup
+  const setupPath = path.join(__dirname, '../database/setup-sqlite.sql');
+  
+  try {
+    const setupSQL = fs.readFileSync(setupPath, 'utf8');
+    
+    // Tách các câu lệnh SQL
+    const statements = setupSQL
+      .split(';')
+      .map(stmt => stmt.trim())
+      .filter(stmt => stmt.length > 0 && !stmt.startsWith('PRINT'));
+    
+    // Thực thi từng câu lệnh
+    let completed = 0;
+    statements.forEach((statement, index) => {
+      db.run(statement, (err) => {
+        if (err) {
+          console.error(`❌ Lỗi thực thi câu lệnh ${index + 1}:`, err.message);
+        }
+        completed++;
+        
+        if (completed === statements.length) {
+          console.log('✅ Tất cả bảng đã được tạo thành công!');
+        }
+      });
+    });
+    
+  } catch (error) {
+    console.error('❌ Lỗi đọc file setup:', error.message);
+    
+    // Fallback: tạo bảng users cơ bản
+    const createUsersTable = `
+      CREATE TABLE IF NOT EXISTS Users (
+        user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        role TEXT DEFAULT 'Customer',
+        phone TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
 
-  db.run(createUsersTable, (err) => {
-    if (err) {
-      console.error('❌ Lỗi tạo bảng users:', err.message);
-    } else {
-      console.log('✅ Bảng users đã sẵn sàng');
-    }
-  });
+    db.run(createUsersTable, (err) => {
+      if (err) {
+        console.error('❌ Lỗi tạo bảng users:', err.message);
+      } else {
+        console.log('✅ Bảng users đã sẵn sàng');
+      }
+    });
+  }
 }
 
 // Hàm kết nối database
