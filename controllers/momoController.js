@@ -122,7 +122,7 @@ exports.createMomoPayment = async (req, res) => {
     const momoRes = await axios.post(
       `${BASE_ENDPOINT}${CREATE_PATH}`,
       { ...body, signature },
-      { timeout: 15000 }
+      { timeout: 15000, headers: { 'Content-Type': 'application/json' } }
     );
 
     // Trả cho FE link thanh toán (payUrl/qrCodeUrl)
@@ -135,8 +135,14 @@ exports.createMomoPayment = async (req, res) => {
       }
     });
   } catch (err) {
-    // Nếu MoMo call fail, cân nhắc markFailed (tùy bạn muốn giữ pending để retry hay không)
-    return res.status(500).json({ error: 'create_failed', detail: err.message });
+    const status = err.response?.status;
+    const data   = err.response?.data;   // ← body từ MoMo (có resultCode/message)
+    console.error('[MoMo create][ERROR]', status, data || err.message);
+
+    return res.status(500).json({
+      error: 'create_failed',
+      detail: data || err.message
+    });
   }
 };
 
