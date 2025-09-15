@@ -1,7 +1,11 @@
 // controllers/momoController.js
 const axios = require('axios');
 const crypto = require('crypto');
+const sql = require('mssql');
+const { getPool } = require('../config/database');
+
 const Transaction = require('../models/Transaction');
+const WalletTx = require('../models/WalletTransaction');
 
 // ENV cần có:
 // MOMO_PARTNER_CODE, MOMO_ACCESS_KEY, MOMO_SECRET_KEY
@@ -67,18 +71,6 @@ const verifyIpnSignature = (payload) => {
   return expected === payload.signature;
 };
 
-// Tùy DB của bạn: cộng tiền ví nội bộ sau khi success
-const creditWallet = async (user_id, amount) => {
-  // TODO: thay bằng UPDATE thực tế theo schema Users/Wallets của bạn.
-  // Ví dụ:
-  // const pool = await getPool();
-  // await pool.request()
-  //   .input('user_id', sql.NVarChar(64), user_id)
-  //   .input('amount', sql.BigInt, amount)
-  //   .query(`UPDATE dbo.Users SET balance = ISNULL(balance,0) + @amount WHERE user_id=@user_id`);
-  return true;
-};
-
 // POST /api/momo/create
 exports.createMomoPayment = async (req, res) => {
   try {
@@ -90,8 +82,20 @@ exports.createMomoPayment = async (req, res) => {
     const user_id = req.user?.userId || req.user?.id || req.user?.user_id; // JWT của bạn
     if (!user_id) return res.status(401).json({ error: 'unauthorized' });
 
-    const orderId = `TOPUP_${user_id}_${Date.now()}`;
+    const orderId = `NAPVI_${user_id}_${Date.now()}`;
     const requestId = `REQ_${Date.now()}`;
+
+    const existing = await Transaction.getByUserPending(user_id);
+    if (existing) {
+      return res.status(409).json({
+        error: 'pending_exists',
+        momo: {
+          orderId: existing.order_id,
+          status: existing.status,
+          amount: existing.amount
+        }
+      });
+    }
 
     // Lưu pending trước để không mất dấu giao dịch
     await Transaction.insertPending({
@@ -186,8 +190,15 @@ exports.momoIpn = async (req, res) => {
         signature: data.signature || null
       });
       if (ok) {
-        // Idempotent: markSuccess WHERE status <> 'success' nên cộng ví 1 lần
-        await creditWallet(tx.user_id, tx.amount);
+        // Ghi lịch sử ví
+        await WalletTx.addTransaction({
+          user_id: tx.user_id,
+          amount: tx.amount,
+          type: 'credit',
+          purpose: 'topup',
+          related_id: tx.order_id,
+          note: 'Nạp tiền MoMo'
+        });
       }
     } else {
       await Transaction.markFailed({
@@ -225,7 +236,16 @@ exports.devConfirm = async (req, res) => {
       result_code: 0,
       signature: null
     });
-    if (ok) await creditWallet(tx.user_id, tx.amount);
+    if (ok) {
+      await WalletTx.addTransaction({
+        user_id: tx.user_id,
+        amount: tx.amount,
+        type: 'credit',
+        purpose: 'topup',
+        related_id: tx.order_id,
+        note: 'Dev confirm nạp tiền'
+      });
+    }
 
     return res.json({ ok: true });
   } catch (err) {
