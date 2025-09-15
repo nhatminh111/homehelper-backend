@@ -69,4 +69,12 @@ const getByOrderId = async (order_id) => {
   return r.recordset[0] || null;
 };
 
-module.exports = { insertPending, markSuccess, markFailed, getByOrderId };
+const getByUserPending = async (user_id) => {
+  const pool = await getPool();
+  const r = await pool.request()
+    .input('user_id', sql.Int, user_id)
+    .query(`SELECT TOP 1 * FROM dbo.Transactions WHERE user_id=@user_id AND status=N'pending' ORDER BY created_at DESC`);
+  return r.recordset[0] || null;
+};
+
+module.exports = { insertPending, markSuccess, markFailed, getByOrderId, getByUserPending };
