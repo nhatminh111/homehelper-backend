@@ -50,7 +50,7 @@ class SocketHandler {
 
   // Thiết lập các event handlers
   setupEventHandlers() {
-    this.io.on('connection', (socket) => {
+  this.io.on('connection', (socket) => {
       // Lưu thông tin kết nối
       if (!this.connectedUsers.has(socket.userId)) {
         this.connectedUsers.set(socket.userId, new Set());
@@ -59,11 +59,19 @@ class SocketHandler {
       this.userSockets.set(socket.id, socket.userId);
       this.joinedRooms.set(socket.id, new Set());
 
-      // Gửi thông báo user online
-      this.broadcastUserStatus(socket.userId, 'online');
 
-      // Gửi danh sách user online hiện tại
-      this.io.emit('online_users', this.getOnlineUsers());
+    // Log danh sách user online sau mỗi kết nối mới
+    console.log('Current online users:', Array.from(this.connectedUsers.keys()));
+
+    // Gửi thông báo user online
+    this.broadcastUserStatus(socket.userId, 'online');
+
+    // Gửi danh sách user online cho riêng socket mới connect
+    console.log(`📤 Emit online_users cho user ${socket.userId}`);
+    socket.emit('online_users', this.getOnlineUsers());
+    // Gửi danh sách user online cho toàn bộ client (nếu muốn cập nhật realtime cho các client khác)
+    console.log('📤 Emit online_users cho toàn bộ client');
+    this.io.emit('online_users', this.getOnlineUsers());
 
       // Đăng ký events
       socket.on('join_conversation', (data) => this.handleJoinConversation(socket, data));
@@ -296,8 +304,10 @@ class SocketHandler {
           this.broadcastUserStatus(userId, 'offline');
         }
       }
-      this.userSockets.delete(socket.id);
-      this.io.emit('online_users', this.getOnlineUsers());
+  this.userSockets.delete(socket.id);
+  // Log danh sách user online trước khi gửi cho FE
+  console.log('Emit online_users after disconnect:', this.getOnlineUsers());
+  this.io.emit('online_users', this.getOnlineUsers());
     } catch (error) {
       console.error('Lỗi disconnect:', error);
     }
