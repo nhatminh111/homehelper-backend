@@ -3,7 +3,7 @@ const WalletTx = require('../models/WalletTransaction');
 // GET /api/wallet/balance
 exports.getBalance = async (req, res) => {
   try {
-    const user_id = req.user?.user_id;
+    const user_id = req.user?.userId;
     if (!user_id) return res.status(401).json({ error: 'unauthorized' });
 
     const balance = await WalletTx.getBalance(user_id);
@@ -16,7 +16,7 @@ exports.getBalance = async (req, res) => {
 // GET /api/wallet/history
 exports.getHistory = async (req, res) => {
   try {
-    const user_id = req.user?.user_id;
+    const user_id = req.user?.userId;
     if (!user_id) return res.status(401).json({ error: 'unauthorized' });
 
     const limit = Number(req.query.limit) || 20;

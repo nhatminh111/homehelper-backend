@@ -30,7 +30,8 @@ const authenticateToken = async (req, res, next) => {
       role: decoded.role,
       email: user.email
     };
-
+    req.user.user_id = decoded.userId;
+    
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
