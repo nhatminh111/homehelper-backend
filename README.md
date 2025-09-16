@@ -87,8 +87,9 @@ Server sẽ chạy tại: `http://localhost:5000`
 |--------|----------|-------------|---------------|
 | POST | `/api/auth/register` | Đăng ký user mới | ❌ |
 | POST | `/api/auth/login` | Đăng nhập | ❌ |
-| POST | `/api/auth/forgot-password` | Quên password | ❌ |
-| POST | `/api/auth/reset-password` | Reset password | ❌ |
+| POST | `/api/auth/forgot-password` | Quên password (gửi email) | ❌ |
+| POST | `/api/auth/reset-password` | Reset password (qua email) | ❌ |
+| GET | `/api/auth/verify-email` | Xác minh email | ❌ |
 | GET | `/api/auth/me` | Lấy thông tin user hiện tại | ✅ |
 | POST | `/api/auth/change-password` | Đổi password | ✅ |
 
