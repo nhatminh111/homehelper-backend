@@ -83,7 +83,7 @@ const requireAdmin = authorizeRole('Admin');
 const requireTasker = authorizeRole('Tasker', 'Admin');
 
 // Middleware kiểm tra quyền customer
-const requireCustomer = authorizeRole('Customer', 'Admin');
+const requireCustomer = authorizeRole('Customer', 'Admin','User');
 
 // Middleware kiểm tra quyền user đã đăng nhập
 const requireAuth = (req, res, next) => {
