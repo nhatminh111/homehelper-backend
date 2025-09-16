@@ -82,7 +82,7 @@ async function executeQuery(query, params = []) {
     
     // Bind parameters nếu có
     params.forEach((param, index) => {
-      request.input(`param${index + 1}`, param);
+      request.input(`param${index + 1}`, param);  
     });
     
     const result = await request.query(query);

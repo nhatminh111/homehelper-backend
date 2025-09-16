@@ -30,8 +30,9 @@ app.use('/uploads', express.static('uploads'));
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/tasker', require('./routes/tasker')); 
+app.use('/api/services', require('./routes/services'));
 // app.use('/api/users', require('./routes/users'));
-// app.use('/api/services', require('./routes/services'));
 // app.use('/api/bookings', require('./routes/bookings'));
 // app.use('/api/posts', require('./routes/posts'));
 // app.use('/api/ratings', require('./routes/ratings'));
