@@ -5,8 +5,6 @@ const morgan = require("morgan");
 const http = require("http");
 const { Server } = require("socket.io");
 const axios = require("axios");
-const http = require("http");
-const { Server } = require("socket.io");
 require("dotenv").config();
 
 const { connectDB } = require("./config/database");
@@ -54,7 +52,7 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use("/uploads", express.static("uploads"));
 
 // Routes
-app.use("/api/taskers", require("./routes/taskers"));
+// app.use("/api/taskers", require("./routes/taskers"));
 app.use("/api/tasker-profile", require("./routes/taskerProfile"));
 // app.use('/api/users', require('./routes/users'));
 app.use("/api/bookings", require("./routes/bookings"));

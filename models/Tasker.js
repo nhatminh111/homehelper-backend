@@ -2,9 +2,9 @@ const { executeQuery } = require("../config/database");
 
 class Tasker {
   //  tìm tất cả tasker với dịch vụ kèm theo
- static async findAll(search = "", serviceId = "") {
-  try {
-    let query = `
+  static async findAll(search = "", serviceId = "") {
+    try {
+      let query = `
       SELECT 
         t.tasker_id,
         u.name AS tasker_name,
@@ -35,75 +35,75 @@ class Tasker {
       WHERE 1=1
     `;
 
-    const params = [];
-    let paramIndex = 1;
+      const params = [];
+      let paramIndex = 1;
 
-    if (search) {
-      query += ` AND (u.name LIKE '%' + @param${paramIndex} + '%' OR s.name LIKE '%' + @param${paramIndex} + '%')`;
-      params.push(search);
-      paramIndex++;
-    }
-
-    if (serviceId) {
-      query += ` AND s.service_id = @param${paramIndex}`;
-      params.push(serviceId);
-      paramIndex++;
-    }
-
-    query += ` ORDER BY t.tasker_id`;
-
-    const result = await executeQuery(query, params);
-    const rows = result.recordset || [];
-
-    // Group dữ liệu taskers -> services -> variants
-    const taskersMap = {};
-
-    rows.forEach((row) => {
-      if (!taskersMap[row.tasker_id]) {
-        taskersMap[row.tasker_id] = {
-          tasker_id: row.tasker_id,
-          name: row.tasker_name,
-          skills: row.skills,
-          certifications: row.certifications,
-          rating: parseFloat(row.rating),
-          reviewsCount: row.reviewsCount,
-          status: row.status,
-          services: [],
-        };
+      if (search) {
+        query += ` AND (u.name LIKE @param${paramIndex} OR s.name LIKE @param${paramIndex})`;
+        params.push(`%${search}%`);
+        paramIndex++;
       }
 
-      if (row.service_id) {
-        let service = taskersMap[row.tasker_id].services.find(
-          (s) => s.service_id === row.service_id
-        );
+      if (serviceId) {
+        query += ` AND s.service_id = @param${paramIndex}`;
+        params.push(serviceId);
+        paramIndex++;
+      }
 
-        if (!service) {
-          service = {
-            service_id: row.service_id,
-            name: row.service_name,
-            variants: [],
+      query += ` ORDER BY t.tasker_id`;
+
+      const result = await executeQuery(query, params);
+      const rows = result.recordset || [];
+
+      // Group dữ liệu taskers -> services -> variants
+      const taskersMap = {};
+
+      rows.forEach((row) => {
+        if (!taskersMap[row.tasker_id]) {
+          taskersMap[row.tasker_id] = {
+            tasker_id: row.tasker_id,
+            name: row.tasker_name,
+            skills: row.skills,
+            certifications: row.certifications,
+            rating: parseFloat(row.rating),
+            reviewsCount: row.reviewsCount,
+            status: row.status,
+            services: [],
           };
-          taskersMap[row.tasker_id].services.push(service);
         }
 
-        if (row.variant_id) {
-          service.variants.push({
-            variant_id: row.variant_id,
-            variant_name: row.variant_name,
-            price_min: row.price_min,
-            price_max: row.price_max,
-            unit: row.unit,
-          });
-        }
-      }
-    });
+        if (row.service_id) {
+          let service = taskersMap[row.tasker_id].services.find(
+            (s) => s.service_id === row.service_id
+          );
 
-    return Object.values(taskersMap);
-  } catch (err) {
-    console.error("Lỗi findAll Taskers:", err);
-    return [];
+          if (!service) {
+            service = {
+              service_id: row.service_id,
+              name: row.service_name,
+              variants: [],
+            };
+            taskersMap[row.tasker_id].services.push(service);
+          }
+
+          if (row.variant_id) {
+            service.variants.push({
+              variant_id: row.variant_id,
+              variant_name: row.variant_name,
+              price_min: row.price_min,
+              price_max: row.price_max,
+              unit: row.unit,
+            });
+          }
+        }
+      });
+
+      return Object.values(taskersMap);
+    } catch (err) {
+      console.error("Lỗi findAll Taskers:", err);
+      return [];
+    }
   }
-}
   // lấy tasker theo id
 
   static async findById(id) {

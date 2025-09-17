@@ -1,37 +1,61 @@
-// const Tasker = require("../models/Tasker");
-
-// class TaskerController {
-//   static async getAll(req, res) {
-//     try {
-//       const { search = "", serviceId = "" } = req.query;
-//       const taskers = await Tasker.findAll(search, serviceId);
-//       res.json(Array.isArray(taskers) ? taskers : []); // ✅ luôn trả về mảng
-//     } catch (error) {
-//       console.error("Lỗi getAll taskers:", error);
-//       res.status(500).json({ error: error.message });
-//     }
-//   }
-
-//   // Lấy tasker theo id kèm reviews
-//   static async getById(req, res) {
-//     const { id } = req.params;
-//     try {
-//       const tasker = await Tasker.findByIdWithReviews(id);
-//       if (!tasker) {
-//         return res.status(404).json({ message: "Tasker not found" });
-//       }
-//       res.json(tasker);
-//     } catch (error) {
-//       console.error("Lỗi getById tasker:", error);
-//       res.status(500).json({ error: error.message });
-//     }
-//   }
-// }
-
 // module.exports = TaskerController;
 const Address = require("../models/Address");
 const axios = require("axios");
+const Tasker = require("../models/Tasker");
 
+
+// Lấy tất cả tasker
+exports.getAll = async (req, res) => {
+  try {
+    const { search = "", serviceId = "" } = req.query;
+    console.log("🔍 Fetch all taskers with filters", { search, serviceId });
+
+    const taskers = await Tasker.findAll(search, serviceId);
+
+    res.json({
+      success: true,
+      message: "Lấy danh sách tasker thành công",
+      data: Array.isArray(taskers) ? taskers : [],
+    });
+  } catch (error) {
+    console.error("❌ Lỗi getAll taskers:", error);
+    res.status(500).json({
+      success: false,
+      message: "Lỗi khi lấy danh sách tasker",
+      error: error.message,
+    });
+  }
+};
+
+// Lấy tasker theo id kèm reviews
+exports.getById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log("🔍 Fetch tasker by id", { id });
+
+    const tasker = await Tasker.findByIdWithReviews(id);
+
+    if (!tasker) {
+      return res.status(404).json({
+        success: false,
+        message: "Tasker không tồn tại",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Lấy thông tin tasker thành công",
+      data: tasker,
+    });
+  } catch (error) {
+    console.error("❌ Lỗi getById tasker:", error);
+    res.status(500).json({
+      success: false,
+      message: "Lỗi khi lấy tasker",
+      error: error.message,
+    });
+  }
+};
 // Tạo địa chỉ (giữ nguyên)
 exports.createAddress = async (req, res) => {
   try {

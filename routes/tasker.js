@@ -3,8 +3,15 @@ const router = express.Router();
 const taskerController = require('../controllers/taskerController');
 const { authenticateToken, requireAuth } = require('../middleware/auth');
 
+// GET /api/taskers
+router.get("/", taskerController.getAll);
+
+// GET /api/taskers/:id
+router.get("/:id", taskerController.getById);
+
 // Public search endpoint - no auth required
 router.post('/search-nearby', taskerController.searchNearbyUsers);
+
 
 // Address management - requires auth
 router.post('/address', authenticateToken, requireAuth, taskerController.createAddress);

@@ -1,19 +1,18 @@
-// const Service = require("../models/Service");
 
-// class ServiceController {
-//   static async getAll(req, res) {
-//     try {
-//       const services = await Service.findAll();
-//       res.json(services);
-//     } catch (error) {
-//       console.error("Lỗi getAll services:", error);
-//       res.status(500).json({ error: error.message });
-//     }
-//   }
-// }
 
-// module.exports = ServiceController;
 const Services = require("../models/Services");
+
+// Lấy tất cả service cơ bản
+const getAll = async (req, res) => {
+  try {
+    const services = await Services.findAll();
+    res.json({ success: true, data: services });
+  } catch (error) {
+    console.error("Error in getAllServicesBasic:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
 
 const getAllServices = async (req, res) => {
   try {
@@ -46,4 +45,5 @@ const getServiceById = async (req, res) => {
 module.exports = {
   getAllServices,
   getServiceById,
+  getAll
 };
