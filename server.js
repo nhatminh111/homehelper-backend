@@ -7,9 +7,9 @@ const { Server } = require('socket.io');
 const axios = require('axios');
 require('dotenv').config();
 
-const { connectDB } = require('./config/database');
-const SocketHandler = require('./socket/socketHandler');
-const { setIOInstance } = require('./controllers/conversationController');
+const { connectDB } = require("./config/database");
+const SocketHandler = require("./socket/socketHandler");
+const { setIOInstance } = require("./controllers/conversationController");
 
 // Khởi tạo Express app
 const app = express();
@@ -21,10 +21,10 @@ app.use(helmet());
 // Khởi tạo Socket.IO
 const io = new Server(server, {
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
-    methods: ['GET', 'POST'],
-    credentials: true
-  }
+    origin: process.env.CORS_ORIGIN || "http://localhost:3000",
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
 });
 
 // Khởi tạo Socket Handler
@@ -34,63 +34,75 @@ const socketHandler = new SocketHandler(io);
 setIOInstance(io);
 
 // Middleware CORS
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: process.env.CORS_ORIGIN || "http://localhost:3000",
+    credentials: true,
+  })
+);
 
 // Middleware logging
-app.use(morgan('combined'));
+app.use(morgan("combined"));
 
 // Middleware parse JSON
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Middleware static files
-app.use('/uploads', express.static('uploads'));
+app.use("/uploads", express.static("uploads"));
 
 // Routes
-app.use('/api/momo', require('./routes/momo'));
-app.use('/api/wallet', require('./routes/wallet'));
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/conversations', require('./routes/conversations'));
-app.use('/api/messages', require('./routes/messages'));
-app.use('/api/notifications', require('./routes/notifications'));
-app.use('/api/users', require('./routes/users'));
-app.use('/api/blogs', require('./routes/blogs'));
+// app.use("/api/taskers", require("./routes/taskers"));
+app.use("/api/tasker-profile", require("./routes/taskerProfile"));
 // app.use('/api/users', require('./routes/users'));
-// app.use('/api/services', require('./routes/services'));
+app.use("/api/bookings", require("./routes/bookings"));
+// app.use('/api/posts', require('./routes/posts'));
+app.use("/api/ratings", require("./routes/ratings"));
+// app.use('/api/feedbacks', require('./routes/feedbacks'));
+// app.use('/api/complaints', require('./routes/complaints'));
+// app.use('/api/notifications', require('./routes/notifications'));
+app.use("/api/momo", require("./routes/momo"));
+app.use("/api/wallet", require("./routes/wallet"));
+app.use("/api/auth", require("./routes/auth"));
+app.use("/api/tasker", require("./routes/tasker"));
+app.use("/api/services", require("./routes/services"));
+app.use("/api/conversations", require("./routes/conversations"));
+app.use("/api/messages", require("./routes/messages"));
+app.use("/api/notifications", require("./routes/notifications"));
+app.use("/api/users", require("./routes/users"));
+app.use("/api/blogs", require("./routes/blogs"));
+// app.use('/api/users', require('./routes/users'));
 // app.use('/api/bookings', require('./routes/bookings'));
 // app.use('/api/posts', require('./routes/posts'));
 // app.use('/api/ratings', require('./routes/ratings'));
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get("/health", (req, res) => {
   res.status(200).json({
-    status: 'OK',
-    message: 'HomeHelper Backend đang hoạt động!',
+    status: "OK",
+    message: "HomeHelper Backend đang hoạt động!",
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV
+    environment: process.env.NODE_ENV,
   });
 });
 
 // 404 handler
-app.use('*', (req, res) => {
+app.use("*", (req, res) => {
   res.status(404).json({
-    error: 'API endpoint không tồn tại',
-    path: req.originalUrl
+    error: "API endpoint không tồn tại",
+    path: req.originalUrl,
   });
 });
 
 // Global error handler
 app.use((error, req, res, next) => {
-  console.error('❌ Global error:', error);
-  
+  console.error("❌ Global error:", error);
+
   res.status(error.status || 500).json({
     error: {
-      message: error.message || 'Lỗi server nội bộ',
-      ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
-    }
+      message: error.message || "Lỗi server nội bộ",
+      ...(process.env.NODE_ENV === "development" && { stack: error.stack }),
+    },
   });
 });
 
@@ -101,30 +113,30 @@ async function startServer() {
   try {
     // Kết nối database
     await connectDB();
-    
+
     // Khởi động server
     server.listen(PORT, () => {
-      console.log('🚀 HomeHelper Backend đã khởi động!');
+      console.log("🚀 HomeHelper Backend đã khởi động!");
       console.log(`📍 Server đang chạy tại: http://localhost:${PORT}`);
       console.log(`🔌 Socket.IO đã sẵn sàng!`);
       console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
-      console.log(`📅 Thời gian: ${new Date().toLocaleString('vi-VN')}`);
-      console.log('='.repeat(50));
+      console.log(`📅 Thời gian: ${new Date().toLocaleString("vi-VN")}`);
+      console.log("=".repeat(50));
     });
   } catch (error) {
-    console.error('❌ Không thể khởi động server:', error);
+    console.error("❌ Không thể khởi động server:", error);
     process.exit(1);
   }
 }
 
 // Xử lý tắt server gracefully
-process.on('SIGTERM', () => {
-  console.log('🛑 Nhận tín hiệu SIGTERM, đang tắt server...');
+process.on("SIGTERM", () => {
+  console.log("🛑 Nhận tín hiệu SIGTERM, đang tắt server...");
   process.exit(0);
 });
 
-process.on('SIGINT', () => {
-  console.log('🛑 Nhận tín hiệu SIGINT, đang tắt server...');
+process.on("SIGINT", () => {
+  console.log("🛑 Nhận tín hiệu SIGINT, đang tắt server...");
   process.exit(0);
 });
 
