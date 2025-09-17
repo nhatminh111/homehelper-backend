@@ -3,14 +3,14 @@ require("dotenv").config();
 
 // Cấu hình kết nối SQL Server
 const dbConfig = {
-  server: process.env.DB_SERVER || "localhost",
-  database: process.env.DB_DATABASE || "HomeHelperDB3",
-  user: process.env.DB_USER || "sa",
-  password: process.env.DB_PASSWORD || "123456789",
-  port: parseInt(process.env.DB_PORT) || 1433,
+  server: process.env.DB_SERVER || 'localhost',
+  database: process.env.DB_DATABASE || 'HomeHelperDB4',
+  user: process.env.DB_USER || 'sa',
+  password: process.env.DB_PASSWORD || 'Minh123',
+  port: parseInt(process.env.DB_PORT || '1433', 10),
   options: {
-    encrypt: false,
-    trustServerCertificate: true,
+    encrypt: false, // Nếu dùng Azure thì để true
+    trustServerCertificate: true // Cho phép self-signed cert
   },
   pool: {
     max: 10,
@@ -24,39 +24,28 @@ let pool = null;
 
 // Hàm tạo pool mới
 function createPool() {
-  if (pool) {
-    try {
-      pool.close();
-    } catch (err) {
-      console.error("Lỗi đóng pool cũ:", err);
-    }
-  }
-
+  if (pool) { try { pool.close(); } catch(e){} }
   pool = new sql.ConnectionPool(dbConfig);
-
-  pool.on("error", (err) => {
-    console.error("Database connection error:", err);
-  });
-
+  pool.on('error', (err) => console.error('Database connection error:', err));
   return pool;
 }
 
 // Hàm kết nối database
 async function connectDB() {
   try {
-    if (!pool) {
-      pool = createPool();
-    }
-
-    await pool.connect();
-    console.log("✅ Kết nối SQL Server thành công!");
-    console.log(`📊 Database: ${dbConfig.database}`);
-    console.log(`🌐 Server: ${dbConfig.server}`);
+    if (!pool) pool = createPool();
+    if (!pool.connected) await pool.connect();
+    console.log('✅ Kết nối SQL Server thành công!');
     return pool;
-  } catch (error) {
-    console.error("❌ Lỗi kết nối database:", error);
-    throw error;
+  } catch (e) {
+    console.error('❌ Lỗi kết nối database:', e);
+    throw e;
   }
+}
+
+async function getPool() {
+  if (pool && pool.connected) return pool;
+  return await connectDB();
 }
 
 // Hàm đóng kết nối
@@ -82,7 +71,7 @@ async function executeQuery(query, params = []) {
 
     // Bind parameters nếu có
     params.forEach((param, index) => {
-      request.input(`param${index + 1}`, param);
+      request.input(`param${index + 1}`, param);  
     });
 
     const result = await request.query(query);
@@ -116,6 +105,7 @@ module.exports = {
   closeDB,
   executeQuery,
   executeStoredProcedure,
-  pool,
-  sqlConfig: dbConfig,
+  getPool,   // ✅ export
+  sql,
+  pool
 };
