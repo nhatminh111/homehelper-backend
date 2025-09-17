@@ -32,13 +32,28 @@ class PostService {
       notes = null
     } = postServiceData;
 
+    let final_desired_price = desired_price;
+    if (final_desired_price == null && variant_id != null) {
+      // Lấy specific_price từ ServiceVariants
+      const priceQuery = 'SELECT specific_price FROM ServiceVariants WHERE variant_id = @param1';
+      try {
+        const priceResult = await executeQuery(priceQuery, [variant_id]);
+        if (priceResult.recordset && priceResult.recordset.length > 0) {
+          final_desired_price = priceResult.recordset[0].specific_price;
+        }
+      } catch (e) {
+        // Nếu lỗi vẫn cho phép tạo, desired_price sẽ là null
+        console.error('Không lấy được specific_price từ ServiceVariants:', e.message);
+      }
+    }
+
     const query = `
       INSERT INTO PostServices (post_id, service_id, variant_id, desired_price, notes, created_at, updated_at)
       VALUES (@param1, @param2, @param3, @param4, @param5, GETDATE(), GETDATE());
       SELECT SCOPE_IDENTITY() AS post_service_id;
     `;
     try {
-      const result = await executeQuery(query, [post_id, service_id, variant_id, desired_price, notes]);
+      const result = await executeQuery(query, [post_id, service_id, variant_id, final_desired_price, notes]);
       const serviceId = result.recordset[0].post_service_id;
       return await PostService.findById(serviceId);
     } catch (error) {
@@ -65,8 +80,8 @@ class PostService {
   // Tìm post service theo ID
   static async findById(id) {
     const query = `
-      SELECT ps.*, s.name as service_name, s.description, s.reference_price as base_price,
-             v.variant_name, v.pricing_type, v.price_min, v.price_max, v.unit
+      SELECT ps.*, s.name as service_name, s.description,
+             v.variant_name, v.pricing_type, v.price_min, v.price_max, v.unit, v.specific_price
       FROM PostServices ps
       LEFT JOIN Services s ON ps.service_id = s.service_id
       LEFT JOIN ServiceVariants v ON ps.variant_id = v.variant_id
@@ -84,8 +99,8 @@ class PostService {
   // Lấy danh sách services của một bài đăng
   static async findByPostId(postId) {
     const query = `
-      SELECT ps.*, s.name as service_name, s.description, s.reference_price as base_price,
-             v.variant_name, v.pricing_type, v.price_min, v.price_max, v.unit
+      SELECT ps.*, s.name as service_name, s.description,
+             v.variant_name, v.pricing_type, v.price_min, v.price_max, v.unit, v.specific_price
       FROM PostServices ps
       LEFT JOIN Services s ON ps.service_id = s.service_id
       LEFT JOIN ServiceVariants v ON ps.variant_id = v.variant_id
@@ -112,7 +127,7 @@ class PostService {
     const query = `
       SELECT ps.post_service_id, ps.post_id, ps.service_id, ps.variant_id, ps.desired_price, ps.notes, ps.created_at, ps.updated_at,
              p.title as post_title, p.content as post_content, p.post_date, p.status,
-             u.name as author_name, s.name as service_name, s.description, s.reference_price as base_price
+             u.name as author_name, s.name as service_name, s.description
       FROM PostServices ps
       LEFT JOIN Posts p ON ps.post_id = p.post_id
       LEFT JOIN Users u ON p.user_id = u.user_id
@@ -155,7 +170,7 @@ class PostService {
   // Lấy thống kê services được yêu cầu nhiều nhất
   static async getPopularServices(limit = 10) {
     const query = `
-      SELECT TOP ${limit} s.service_id, s.name as service_name, s.description, s.reference_price as base_price,
+      SELECT TOP ${limit} s.service_id, s.name as service_name, s.description,
              COUNT(ps.post_service_id) as request_count,
              AVG(ps.desired_price) as avg_desired_price,
              MIN(ps.desired_price) as min_desired_price,
@@ -164,7 +179,7 @@ class PostService {
       LEFT JOIN PostServices ps ON s.service_id = ps.service_id
       LEFT JOIN Posts p ON ps.post_id = p.post_id
       WHERE p.status = 'Đã phê duyệt' OR p.status IS NULL
-      GROUP BY s.service_id, s.name, s.description, s.reference_price
+      GROUP BY s.service_id, s.name, s.description
       ORDER BY request_count DESC
     `;
     try {
@@ -182,8 +197,7 @@ class PostService {
         COUNT(*) as total_requests,
         AVG(desired_price) as avg_price,
         MIN(desired_price) as min_price,
-        MAX(desired_price) as max_price,
-        s.reference_price as service_base_price
+        MAX(desired_price) as max_price
       FROM PostServices ps
       LEFT JOIN Services s ON ps.service_id = s.service_id
       LEFT JOIN Posts p ON ps.post_id = p.post_id
@@ -283,7 +297,7 @@ class PostService {
     let query = `
       SELECT ps.post_service_id, ps.post_id, ps.service_id, ps.variant_id, ps.desired_price, ps.notes, ps.created_at, ps.updated_at,
              p.title as post_title, p.content as post_content, p.post_date,
-             u.name as author_name, s.name as service_name, s.description, s.reference_price as base_price
+             u.name as author_name, s.name as service_name, s.description
       FROM PostServices ps
       LEFT JOIN Posts p ON ps.post_id = p.post_id
       LEFT JOIN Users u ON p.user_id = u.user_id
