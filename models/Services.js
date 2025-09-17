@@ -1,10 +1,10 @@
-const { executeQuery } = require('../config/database');
+const { executeQuery } = require("../config/database");
 
 class Services {
-    // Get all services
-    static async getAllServices() {
-        try {
-            const query = `
+  // Get all services
+  static async getAllServices() {
+    try {
+      const query = `
                 SELECT 
                     s.service_id,
                     s.name,
@@ -25,22 +25,22 @@ class Services {
                     ) as variants
                 FROM Services s
                 ORDER BY s.service_id`;
-            
-            const result = await executeQuery(query);
-            return result.recordset.map(record => ({
-                ...record,
-                variants: JSON.parse(record.variants || '[]')
-            }));
-        } catch (error) {
-            console.error('Error getting services:', error);
-            throw error;
-        }
-    }
 
-    // Get service by ID with its variants
-    static async getServiceById(serviceId) {
-        try {
-            const query = `
+      const result = await executeQuery(query);
+      return result.recordset.map((record) => ({
+        ...record,
+        variants: JSON.parse(record.variants || "[]"),
+      }));
+    } catch (error) {
+      console.error("Error getting services:", error);
+      throw error;
+    }
+  }
+
+  // Get service by ID with its variants
+  static async getServiceById(serviceId) {
+    try {
+      const query = `
                 SELECT 
                     s.service_id,
                     s.name,
@@ -61,18 +61,28 @@ class Services {
                     ) as variants
                 FROM Services s
                 WHERE s.service_id = @param1`;
-            
-            const result = await executeQuery(query, [serviceId]);
-            const service = result.recordset[0];
-            if (service) {
-                service.variants = JSON.parse(service.variants || '[]');
-            }
-            return service;
-        } catch (error) {
-            console.error('Error getting service:', error);
-            throw error;
-        }
+
+      const result = await executeQuery(query, [serviceId]);
+      const service = result.recordset[0];
+      if (service) {
+        service.variants = JSON.parse(service.variants || "[]");
+      }
+      return service;
+    } catch (error) {
+      console.error("Error getting service:", error);
+      throw error;
     }
+  }
+  //Get services without return variants
+  static async findAll() {
+    const query = `
+      SELECT service_id, name, description
+      FROM Services
+      ORDER BY name ASC
+    `;
+    const result = await executeQuery(query);
+    return result.recordset || [];
+  }
 }
 
 module.exports = Services;
