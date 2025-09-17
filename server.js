@@ -1,11 +1,11 @@
-const express = require("express");
-const cors = require("cors");
-const helmet = require("helmet");
-const morgan = require("morgan");
-const http = require("http");
-const { Server } = require("socket.io");
-const axios = require("axios");
-require("dotenv").config();
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+const http = require('http');
+const { Server } = require('socket.io');
+const axios = require('axios');
+require('dotenv').config();
 
 const { connectDB } = require("./config/database");
 const SocketHandler = require("./socket/socketHandler");

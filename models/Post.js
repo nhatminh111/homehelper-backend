@@ -90,6 +90,7 @@ static async findById(id) {
         p.post_id,
         p.title,
         p.content,
+        p.post_date,
         u.name as author_name,
         u.email as author_email,
         (SELECT COUNT(*) FROM PostLikes pl WHERE pl.post_id = p.post_id) as likes_count,
@@ -120,7 +121,7 @@ static async findById(id) {
     }
 
     // Group by post_id
-    query += ' GROUP BY p.post_id, p.title, p.content, p.post_date, p.status, p.photo_urls, p.likes, p.comments_count, p.created_at, p.updated_at, p.user_id, u.name, u.email';
+  query += ' GROUP BY p.post_id, p.title, p.content, p.post_date, p.status, p.photo_urls, p.likes, p.comments_count, p.created_at, p.updated_at, p.user_id, u.name, u.email';
 
     // Sorting
     query += ` ORDER BY p.${sortBy} ${sortOrder}`;
@@ -133,6 +134,8 @@ static async findById(id) {
         post.photo_urls = JSON.parse(post.photo_urls || '[]');
         post.likes = row.likes_count;
         post.comments_count = row.comments_count;
+        post.author_name = row.author_name || 'Ẩn danh';
+        post.author_email = row.author_email || '';
         return post;
       });
 
@@ -285,9 +288,10 @@ static async findById(id) {
   // Lấy dịch vụ liên quan đến bài đăng
   async getServices() {
     const query = `
-      SELECT ps.*, s.name as name, s.description, s.reference_price
+      SELECT ps.*, s.name as name, s.description, v.specific_price, v.variant_name
       FROM PostServices ps
       LEFT JOIN Services s ON ps.service_id = s.service_id
+      LEFT JOIN ServiceVariants v ON ps.variant_id = v.variant_id
       WHERE ps.post_id = @param1
     `;
     

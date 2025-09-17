@@ -62,150 +62,95 @@ exports.createAddress = async (req, res) => {
     const { address: inputAddress } = req.body;
     const user_id = req.user.userId;
 
-    // Kiểm tra đầu vào địa chỉ
-    if (
-      !inputAddress ||
-      typeof inputAddress !== "string" ||
-      inputAddress.trim().length === 0
-    ) {
-      return res
-        .status(400)
-        .json({ message: "Địa chỉ là bắt buộc và phải là chuỗi không rỗng" });
+    if (!inputAddress || typeof inputAddress !== 'string' || inputAddress.trim().length === 0) {
+      return res.status(400).json({ message: 'Địa chỉ là bắt buộc và phải là chuỗi không rỗng' });
     }
 
     const trimmedAddress = inputAddress.trim();
 
-    // Kiểm tra xem người dùng đã có địa chỉ hay chưa
-    console.log(`🔍 Kiểm tra địa chỉ hiện có cho user_id: ${user_id}`);
-    const existingAddress = await Address.findByUserId(user_id); // Giả sử bạn có hàm findByUserId trong model Address
-
-    if (existingAddress) {
-      console.warn(
-        `⚠️ Người dùng ${user_id} đã có địa chỉ: ${existingAddress.address}`
-      );
-      return res.status(400).json({
-        message:
-          "Mỗi người dùng chỉ được phép có một địa chỉ. Vui lòng xóa hoặc cập nhật địa chỉ hiện tại.",
-      });
-    }
-
     // Gọi VietMap Search API v3 để lấy ref_id
     console.log(`🔍 Tìm kiếm địa chỉ: ${trimmedAddress}`);
-    const searchResponse = await axios.get(
-      "https://maps.vietmap.vn/api/search/v3",
-      {
-        params: {
-          apikey: process.env.VIETMAP_APIKEY,
-          text: trimmedAddress,
-          layers: "ADDRESS",
-          focus: "16.054407,108.202166", // Trung tâm Đà Nẵng
-        },
-        timeout: 5000,
-      }
-    );
+    const searchResponse = await axios.get('https://maps.vietmap.vn/api/search/v3', {
+      params: {
+        apikey: process.env.VIETMAP_APIKEY,
+        text: trimmedAddress,
+        layers: 'ADDRESS',
+        focus: '16.054407,108.202166' // Trung tâm Đà Nẵng
+      },
+      timeout: 5000
+    });
 
-    console.log("📊 Search API response:", searchResponse.data);
+    console.log('📊 Search API response:', searchResponse.data);
     if (!searchResponse.data || searchResponse.data.length === 0) {
-      console.warn("⚠️ Không tìm thấy kết quả, lưu địa chỉ mà không có tọa độ");
+      console.warn('⚠️ Không tìm thấy kết quả, lưu địa chỉ mà không có tọa độ');
       const newAddress = await Address.create(user_id, trimmedAddress, 0, 0);
-      return res.status(201).json({
-        ...newAddress,
-        message:
-          "Đã lưu địa chỉ nhưng không tìm thấy tọa độ trên bản đồ. Vui lòng kiểm tra lại định dạng.",
-      });
+      return res.status(201).json({ ...newAddress, message: 'Đã lưu địa chỉ nhưng không tìm thấy tọa độ trên bản đồ. Vui lòng kiểm tra lại định dạng.' });
     }
 
     // Tìm kết quả chính xác nhất
-    const exactMatch = searchResponse.data.find((item) => {
+    const exactMatch = searchResponse.data.find(item => {
       const lowerInput = trimmedAddress.toLowerCase();
       const lowerDisplay = item.display.toLowerCase();
       const lowerName = item.name.toLowerCase();
       const lowerAddress = item.address.toLowerCase();
-
-      if (lowerName === lowerInput || lowerInput.includes(lowerName))
-        return true;
-      if (lowerDisplay === lowerInput || lowerAddress === lowerInput)
-        return true;
+      
+      if (lowerName === lowerInput || lowerInput.includes(lowerName)) return true;
+      if (lowerDisplay === lowerInput || lowerAddress === lowerInput) return true;
       return false;
     });
 
     if (!exactMatch) {
-      console.warn(
-        "⚠️ Không tìm thấy kết quả chính xác, lưu địa chỉ mà không có tọa độ"
-      );
+      console.warn('⚠️ Không tìm thấy kết quả chính xác, lưu địa chỉ mà không có tọa độ');
       const newAddress = await Address.create(user_id, trimmedAddress, 0, 0);
-      return res.status(201).json({
-        ...newAddress,
-        message:
-          "Đã lưu địa chỉ nhưng không tìm thấy kết quả chính xác. Vui lòng kiểm tra lại.",
-      });
+      return res.status(201).json({ ...newAddress, message: 'Đã lưu địa chỉ nhưng không tìm thấy kết quả chính xác. Vui lòng kiểm tra lại.' });
     }
 
     const refId = exactMatch.ref_id;
-    console.log("📌 Kết quả chính xác:", exactMatch);
+    console.log('📌 Kết quả chính xác:', exactMatch);
 
     if (!refId) {
-      console.warn("⚠️ Không tìm thấy ref_id, lưu địa chỉ mà không có tọa độ");
+      console.warn('⚠️ Không tìm thấy ref_id, lưu địa chỉ mà không có tọa độ');
       const newAddress = await Address.create(user_id, trimmedAddress, 0, 0);
-      return res.status(201).json({
-        ...newAddress,
-        message:
-          "Đã lưu địa chỉ nhưng không tìm thấy ref_id. Vui lòng kiểm tra lại.",
-      });
+      return res.status(201).json({ ...newAddress, message: 'Đã lưu địa chỉ nhưng không tìm thấy ref_id. Vui lòng kiểm tra lại.' });
     }
 
     // Gọi Place API v3 để lấy lat/lng
     console.log(`🔍 Gọi Place API với refid: ${refId}`);
-    const placeResponse = await axios.get(
-      "https://maps.vietmap.vn/api/place/v3",
-      {
-        params: {
-          apikey: process.env.VIETMAP_APIKEY,
-          refid: refId,
-        },
-        timeout: 5000,
-      }
-    );
+    const placeResponse = await axios.get('https://maps.vietmap.vn/api/place/v3', {
+      params: {
+        apikey: process.env.VIETMAP_APIKEY,
+refid: refId
+      },
+      timeout: 5000
+    });
 
-    console.log("📍 Place API status:", placeResponse.status);
+    console.log('📍 Place API status:', placeResponse.status);
     if (placeResponse.data && placeResponse.data.error) {
-      console.warn("⚠️ Place API trả về lỗi:", placeResponse.data.error);
+      console.warn('⚠️ Place API trả về lỗi:', placeResponse.data.error);
     }
     const { lat, lng } = placeResponse.data;
 
     if (!lat || !lng || lat === 0 || lng === 0) {
-      console.warn("⚠️ Không lấy được tọa độ hợp lệ, lưu mặc định 0");
+      console.warn('⚠️ Không lấy được tọa độ hợp lệ, lưu mặc định 0');
       const newAddress = await Address.create(user_id, trimmedAddress, 0, 0);
-      return res.status(201).json({
-        ...newAddress,
-        message:
-          "Đã lưu địa chỉ nhưng không lấy được tọa độ hợp lệ. Vui lòng kiểm tra lại.",
-      });
+      return res.status(201).json({ ...newAddress, message: 'Đã lưu địa chỉ nhưng không lấy được tọa độ hợp lệ. Vui lòng kiểm tra lại.' });
     }
 
     // Lưu vào DB
     const newAddress = await Address.create(user_id, trimmedAddress, lat, lng);
     res.status(201).json(newAddress);
   } catch (error) {
-    console.error(
-      "❌ Lỗi khi tạo địa chỉ:",
-      error.response?.data || error.message
-    );
+    console.error('❌ Lỗi khi tạo địa chỉ:', error.response?.data || error.message);
     if (error.response?.status === 401 || error.response?.status === 403) {
-      return res
-        .status(401)
-        .json({ message: "Lỗi API VietMap: Key không hợp lệ hoặc hết hạn" });
+      return res.status(401).json({ message: 'Lỗi API VietMap: Key không hợp lệ hoặc hết hạn' });
     }
-    if (error.code === "ECONNABORTED") {
-      return res
-        .status(500)
-        .json({ message: "Lỗi kết nối đến VietMap. Vui lòng thử lại sau." });
+    if (error.code === 'ECONNABORTED') {
+      return res.status(500).json({ message: 'Lỗi kết nối đến VietMap. Vui lòng thử lại sau.' });
     }
-    res
-      .status(500)
-      .json({ message: "Lỗi khi tạo địa chỉ", error: error.message });
+    res.status(500).json({ message: 'Mỗi người chỉ 1 địa chỉ', error: error.message });
   }
 };
+
 // Cập nhật địa chỉ (giữ nguyên)
 exports.updateAddress = async (req, res) => {
   try {
