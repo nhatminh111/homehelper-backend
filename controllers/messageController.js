@@ -59,6 +59,20 @@ class MessageController {
 
       const updatedMessage = await Message.update(messageId, { content: content.trim() });
 
+      // Realtime emit qua Socket.IO nếu có io instance gắn vào app
+      try {
+        const io = req.app.get('io');
+        if (io && updatedMessage) {
+          // Lấy conversationId từ record
+          const conversationId = updatedMessage.conversation_id;
+          const room = `conversation_${conversationId}`;
+          // Emit tới phòng (các user khác) và cả người sửa để đồng bộ trạng thái is_edited
+          io.to(room).emit('message_updated', { conversationId, message: updatedMessage });
+        }
+      } catch (emitErr) {
+        console.error('Không emit được message_updated:', emitErr.message);
+      }
+
       res.status(200).json({
         message: 'Cập nhật tin nhắn thành công',
         message: updatedMessage
