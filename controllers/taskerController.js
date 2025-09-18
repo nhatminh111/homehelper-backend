@@ -1,29 +1,17 @@
 const Address = require('../models/Address');
 const axios = require('axios');
 
-// Tạo địa chỉ (giữ nguyên)
+// Tạo địa chỉ 
 exports.createAddress = async (req, res) => {
   try {
     const { address: inputAddress } = req.body;
     const user_id = req.user.userId;
 
-    // Kiểm tra đầu vào địa chỉ
     if (!inputAddress || typeof inputAddress !== 'string' || inputAddress.trim().length === 0) {
       return res.status(400).json({ message: 'Địa chỉ là bắt buộc và phải là chuỗi không rỗng' });
     }
 
     const trimmedAddress = inputAddress.trim();
-
-    // Kiểm tra xem người dùng đã có địa chỉ hay chưa
-    console.log(`🔍 Kiểm tra địa chỉ hiện có cho user_id: ${user_id}`);
-    const existingAddress = await Address.findByUserId(user_id); // Giả sử bạn có hàm findByUserId trong model Address
-
-    if (existingAddress) {
-      console.warn(`⚠️ Người dùng ${user_id} đã có địa chỉ: ${existingAddress.address}`);
-      return res.status(400).json({ 
-        message: 'Mỗi người dùng chỉ được phép có một địa chỉ. Vui lòng xóa hoặc cập nhật địa chỉ hiện tại.' 
-      });
-    }
 
     // Gọi VietMap Search API v3 để lấy ref_id
     console.log(`🔍 Tìm kiếm địa chỉ: ${trimmedAddress}`);
@@ -41,10 +29,7 @@ exports.createAddress = async (req, res) => {
     if (!searchResponse.data || searchResponse.data.length === 0) {
       console.warn('⚠️ Không tìm thấy kết quả, lưu địa chỉ mà không có tọa độ');
       const newAddress = await Address.create(user_id, trimmedAddress, 0, 0);
-      return res.status(201).json({ 
-        ...newAddress, 
-        message: 'Đã lưu địa chỉ nhưng không tìm thấy tọa độ trên bản đồ. Vui lòng kiểm tra lại định dạng.' 
-      });
+      return res.status(201).json({ ...newAddress, message: 'Đã lưu địa chỉ nhưng không tìm thấy tọa độ trên bản đồ. Vui lòng kiểm tra lại định dạng.' });
     }
 
     // Tìm kết quả chính xác nhất
@@ -62,10 +47,7 @@ exports.createAddress = async (req, res) => {
     if (!exactMatch) {
       console.warn('⚠️ Không tìm thấy kết quả chính xác, lưu địa chỉ mà không có tọa độ');
       const newAddress = await Address.create(user_id, trimmedAddress, 0, 0);
-      return res.status(201).json({ 
-        ...newAddress, 
-        message: 'Đã lưu địa chỉ nhưng không tìm thấy kết quả chính xác. Vui lòng kiểm tra lại.' 
-      });
+      return res.status(201).json({ ...newAddress, message: 'Đã lưu địa chỉ nhưng không tìm thấy kết quả chính xác. Vui lòng kiểm tra lại.' });
     }
 
     const refId = exactMatch.ref_id;
@@ -74,10 +56,7 @@ exports.createAddress = async (req, res) => {
     if (!refId) {
       console.warn('⚠️ Không tìm thấy ref_id, lưu địa chỉ mà không có tọa độ');
       const newAddress = await Address.create(user_id, trimmedAddress, 0, 0);
-      return res.status(201).json({ 
-        ...newAddress, 
-        message: 'Đã lưu địa chỉ nhưng không tìm thấy ref_id. Vui lòng kiểm tra lại.' 
-      });
+      return res.status(201).json({ ...newAddress, message: 'Đã lưu địa chỉ nhưng không tìm thấy ref_id. Vui lòng kiểm tra lại.' });
     }
 
     // Gọi Place API v3 để lấy lat/lng
@@ -99,10 +78,7 @@ exports.createAddress = async (req, res) => {
     if (!lat || !lng || lat === 0 || lng === 0) {
       console.warn('⚠️ Không lấy được tọa độ hợp lệ, lưu mặc định 0');
       const newAddress = await Address.create(user_id, trimmedAddress, 0, 0);
-      return res.status(201).json({ 
-        ...newAddress, 
-        message: 'Đã lưu địa chỉ nhưng không lấy được tọa độ hợp lệ. Vui lòng kiểm tra lại.' 
-      });
+      return res.status(201).json({ ...newAddress, message: 'Đã lưu địa chỉ nhưng không lấy được tọa độ hợp lệ. Vui lòng kiểm tra lại.' });
     }
 
     // Lưu vào DB
@@ -116,7 +92,7 @@ exports.createAddress = async (req, res) => {
     if (error.code === 'ECONNABORTED') {
       return res.status(500).json({ message: 'Lỗi kết nối đến VietMap. Vui lòng thử lại sau.' });
     }
-    res.status(500).json({ message: 'Lỗi khi tạo địa chỉ', error: error.message });
+    res.status(500).json({ message: 'Mỗi người chỉ 1 địa chỉ', error: error.message });
   }
 };
 // Cập nhật địa chỉ (giữ nguyên)

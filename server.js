@@ -5,8 +5,6 @@ const morgan = require('morgan');
 const http = require('http');
 const { Server } = require('socket.io');
 const axios = require('axios');
-const http = require('http');
-const { Server } = require('socket.io');
 require('dotenv').config();
 
 const { connectDB } = require('./config/database');
