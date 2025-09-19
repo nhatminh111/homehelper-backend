@@ -47,15 +47,35 @@ class PostService {
       }
     }
 
-    const query = `
-      INSERT INTO PostServices (post_id, service_id, variant_id, desired_price, notes, created_at, updated_at)
-      VALUES (@param1, @param2, @param3, @param4, @param5, GETDATE(), GETDATE());
-      SELECT SCOPE_IDENTITY() AS post_service_id;
-    `;
     try {
-      const result = await executeQuery(query, [post_id, service_id, variant_id, final_desired_price, notes]);
-      const serviceId = result.recordset[0].post_service_id;
-      return await PostService.findById(serviceId);
+      // Detect whether post_service_id is an IDENTITY column
+      const identityCheckQuery = `SELECT COLUMNPROPERTY(OBJECT_ID('PostServices'), 'post_service_id', 'IsIdentity') AS is_identity`;
+      const identityResult = await executeQuery(identityCheckQuery);
+      const isIdentity = identityResult.recordset && identityResult.recordset[0] && identityResult.recordset[0].is_identity === 1;
+
+      if (isIdentity) {
+        // Standard insert relying on IDENTITY
+        const insertQuery = `
+          INSERT INTO PostServices (post_id, service_id, variant_id, desired_price, notes)
+          VALUES (@param1, @param2, @param3, @param4, @param5);
+          SELECT SCOPE_IDENTITY() AS post_service_id;
+        `;
+        const result = await executeQuery(insertQuery, [post_id, service_id, variant_id, final_desired_price, notes]);
+        const serviceId = result.recordset[0].post_service_id;
+        return await PostService.findById(serviceId);
+      } else {
+        // No IDENTITY on post_service_id: compute next id and insert explicitly
+        const nextIdQuery = `SELECT ISNULL(MAX(post_service_id), 0) + 1 AS next_id FROM PostServices`;
+        const nextIdResult = await executeQuery(nextIdQuery);
+        const nextId = nextIdResult.recordset[0].next_id;
+
+        const insertQuery = `
+          INSERT INTO PostServices (post_service_id, post_id, service_id, variant_id, desired_price, notes)
+          VALUES (@param1, @param2, @param3, @param4, @param5, @param6);
+        `;
+        await executeQuery(insertQuery, [nextId, post_id, service_id, variant_id, final_desired_price, notes]);
+        return await PostService.findById(nextId);
+      }
     } catch (error) {
       throw new Error(`Error creating post service: ${error.message}`);
     }
@@ -105,7 +125,7 @@ class PostService {
       LEFT JOIN Services s ON ps.service_id = s.service_id
       LEFT JOIN ServiceVariants v ON ps.variant_id = v.variant_id
       WHERE ps.post_id = @param1
-      ORDER BY ps.created_at ASC
+      ORDER BY ps.post_service_id ASC
     `;
     try {
       const result = await executeQuery(query, [postId]);
@@ -125,14 +145,14 @@ class PostService {
     const offset = (page - 1) * limit;
 
     const query = `
-      SELECT ps.post_service_id, ps.post_id, ps.service_id, ps.variant_id, ps.desired_price, ps.notes, ps.created_at, ps.updated_at,
+      SELECT ps.post_service_id, ps.post_id, ps.service_id, ps.variant_id, ps.desired_price, ps.notes,
              p.title as post_title, p.content as post_content, p.post_date, p.status,
              u.name as author_name, s.name as service_name, s.description
       FROM PostServices ps
       LEFT JOIN Posts p ON ps.post_id = p.post_id
       LEFT JOIN Users u ON p.user_id = u.user_id
       LEFT JOIN Services s ON ps.service_id = s.service_id
-      WHERE ps.service_id = @param1 AND p.status = 'Đã phê duyệt'
+      WHERE ps.service_id = @param1 AND (p.status = 'Approved' OR p.status = N'Đã phê duyệt')
       ORDER BY p.post_date DESC
       OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
     `;
@@ -145,7 +165,7 @@ class PostService {
         SELECT COUNT(*) as total 
         FROM PostServices ps
         LEFT JOIN Posts p ON ps.post_id = p.post_id
-        WHERE ps.service_id = @param1 AND p.status = 'Đã phê duyệt'
+        WHERE ps.service_id = @param1 AND (p.status = 'Approved' OR p.status = N'Đã phê duyệt')
       `;
       const countResult = await executeQuery(countQuery, [serviceId]);
       const total = countResult.recordset[0].total;
@@ -178,7 +198,7 @@ class PostService {
       FROM Services s
       LEFT JOIN PostServices ps ON s.service_id = ps.service_id
       LEFT JOIN Posts p ON ps.post_id = p.post_id
-      WHERE p.status = 'Đã phê duyệt' OR p.status IS NULL
+      WHERE (p.status = 'Approved' OR p.status = N'Đã phê duyệt' OR p.status IS NULL)
       GROUP BY s.service_id, s.name, s.description
       ORDER BY request_count DESC
     `;
@@ -201,7 +221,7 @@ class PostService {
       FROM PostServices ps
       LEFT JOIN Services s ON ps.service_id = s.service_id
       LEFT JOIN Posts p ON ps.post_id = p.post_id
-      WHERE ps.service_id = @param1 AND p.status = 'Đã phê duyệt' AND ps.desired_price IS NOT NULL
+      WHERE ps.service_id = @param1 AND (p.status = 'Approved' OR p.status = N'Đã phê duyệt') AND ps.desired_price IS NOT NULL
     `;
     try {
       const result = await executeQuery(query, [serviceId]);
@@ -229,10 +249,8 @@ class PostService {
       throw new Error('No valid fields to update');
     }
     
-    updates.push('updated_at = GETDATE()');
-    values.push(this.post_service_id);
-    
-    const query = `UPDATE PostServices SET ${updates.join(', ')} WHERE post_service_id = @param${values.length}`;
+  values.push(this.post_service_id);
+  const query = `UPDATE PostServices SET ${updates.join(', ')} WHERE post_service_id = @param${values.length}`;
     
     try {
       await executeQuery(query, values);
@@ -279,7 +297,7 @@ class PostService {
         AVG(ps.desired_price) as avg_desired_price
       FROM PostServices ps
       LEFT JOIN Posts p ON ps.post_id = p.post_id
-      WHERE p.status = 'Đã phê duyệt'
+      WHERE (p.status = 'Approved' OR p.status = N'Đã phê duyệt')
     `;
     try {
       const result = await executeQuery(query);
@@ -295,14 +313,14 @@ class PostService {
     const offset = (page - 1) * limit;
 
     let query = `
-      SELECT ps.post_service_id, ps.post_id, ps.service_id, ps.variant_id, ps.desired_price, ps.notes, ps.created_at, ps.updated_at,
+      SELECT ps.post_service_id, ps.post_id, ps.service_id, ps.variant_id, ps.desired_price, ps.notes,
              p.title as post_title, p.content as post_content, p.post_date,
              u.name as author_name, s.name as service_name, s.description
       FROM PostServices ps
       LEFT JOIN Posts p ON ps.post_id = p.post_id
       LEFT JOIN Users u ON p.user_id = u.user_id
       LEFT JOIN Services s ON ps.service_id = s.service_id
-      WHERE ps.service_id = @param1 AND p.status = 'Đã phê duyệt'
+      WHERE ps.service_id = @param1 AND (p.status = 'Approved' OR p.status = N'Đã phê duyệt')
     `;
     const params = [serviceId];
 
@@ -327,7 +345,7 @@ class PostService {
         SELECT COUNT(*) as total 
         FROM PostServices ps
         LEFT JOIN Posts p ON ps.post_id = p.post_id
-        WHERE ps.service_id = @param1 AND p.status = 'Đã phê duyệt'
+        WHERE ps.service_id = @param1 AND (p.status = 'Approved' OR p.status = N'Đã phê duyệt')
       `;
       const countParams = [serviceId];
 

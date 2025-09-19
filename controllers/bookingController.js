@@ -48,6 +48,64 @@ class BookingController {
       res.status(500).json({ error: error.message });
     }
   }
+  
+    // Danh sách booking của user (khách hàng)
+    static async listMyBookings(req, res) {
+    try {
+      const userId = req.user.userId;
+      const { status = null, limit = 50 } = req.query;
+
+      let query = `
+        SELECT TOP ${parseInt(limit)}
+          b.booking_id,
+          b.customer_id,
+          b.tasker_id,
+          b.service_id,
+          b.variant_id,
+          b.start_time,
+          b.end_time,
+          b.location,
+          b.status,
+          s.name AS service_name,
+          sv.variant_name
+        FROM Bookings b
+        LEFT JOIN Services s ON b.service_id = s.service_id
+        LEFT JOIN ServiceVariants sv ON b.variant_id = sv.variant_id
+        WHERE b.customer_id = @param1
+      `;
+      const params = [userId];
+
+      if (status) {
+        // Accept English or Vietnamese. Simple map for common values
+        const vnMap = {
+          'Pending': 'Chờ xử lý',
+          'Accepted': 'Đã chấp nhận',
+          'In Progress': 'Đang tiến hành',
+          'Completed': 'Hoàn thành',
+          'Cancelled': 'Hủy'
+        };
+        const vn = vnMap[status] || null;
+        if (vn) {
+          query += ` AND (b.status = @param${params.length + 1} OR b.status = @param${params.length + 2})`;
+          params.push(status, vn);
+        } else {
+          query += ` AND b.status = @param${params.length + 1}`;
+          params.push(status);
+        }
+      }
+
+      query += ' ORDER BY ISNULL(b.start_time, b.booking_time) DESC';
+
+      const result = await executeQuery(query, params);
+      return res.json({ success: true, data: result.recordset || [] });
+    } catch (error) {
+      console.error('❌ Error listing my bookings:', error);
+      return res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  }
 }
 
-module.exports = BookingController;
+module.exports = {
+  canRateTasker: BookingController.canRateTasker,
+  listMyBookings: BookingController.listMyBookings,
+};

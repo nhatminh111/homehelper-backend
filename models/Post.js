@@ -7,7 +7,9 @@ class Post {
     this.title = data.title;
     this.content = data.content;
     this.post_date = data.post_date;
-    this.status = data.status || 'Pending';
+  // Status (English preferred): 'Pending' | 'Approved' | 'Rejected'
+  this.status = data.status || 'Pending';
+    this.related_booking_id = data.related_booking_id || null;
     this.photo_urls = data.photo_urls;
     this.likes = data.likes || 0;
     this.comments_count = data.comments_count || 0;
@@ -22,14 +24,15 @@ class Post {
       title,
       content,
       status = 'Pending',
-      photo_urls = null
+      photo_urls = null,
+      related_booking_id = null
     } = postData;
 
     const query = `
       INSERT INTO Posts (
-        user_id, title, content, status, photo_urls,
+        user_id, title, content, status, related_booking_id, photo_urls,
         created_at, updated_at
-      ) VALUES (@param1, @param2, @param3, @param4, @param5, GETDATE(), GETDATE());
+      ) VALUES (@param1, @param2, @param3, @param4, @param5, @param6, GETDATE(), GETDATE());
       
       SELECT SCOPE_IDENTITY() AS post_id;
     `;
@@ -38,7 +41,7 @@ class Post {
     
     try {
       const result = await executeQuery(query, [
-        user_id, title, content, status, photoUrlsJson
+        user_id, title, content, status, related_booking_id, photoUrlsJson
       ]);
       
       const postId = result.recordset[0].post_id;
@@ -77,6 +80,7 @@ static async findById(id) {
     const {
       page = 1,
       limit = 10,
+      // Default to approved posts
       status = 'Approved',
       search = '',
       user_id = null,
@@ -91,10 +95,13 @@ static async findById(id) {
         p.title,
         p.content,
         p.post_date,
+        p.status,
+        p.photo_urls,
+        p.related_booking_id,
         u.name as author_name,
         u.email as author_email,
         (SELECT COUNT(*) FROM PostLikes pl WHERE pl.post_id = p.post_id) as likes_count,
-        (SELECT COUNT(*) FROM Comments c WHERE c.post_id = p.post_id) as comments_count
+        (SELECT COUNT(*) FROM Comments c WHERE c.post_id = p.post_id AND c.parent_comment_id IS NULL) as comments_count
       FROM Posts p
       LEFT JOIN Users u ON p.user_id = u.user_id
       WHERE 1=1
@@ -103,8 +110,20 @@ static async findById(id) {
 
     // Filter by status
     if (status) {
-      query += ' AND p.status = @param' + (params.length + 1);
-      params.push(status);
+      // Support both English and legacy Vietnamese values for compatibility
+      const vnMap = {
+        'Approved': 'Đã phê duyệt',
+        'Pending': 'Chờ xử lý',
+        'Rejected': 'Bị từ chối'
+      };
+      const vn = vnMap[status] || null;
+      if (vn) {
+        query += ' AND (p.status = @param' + (params.length + 1) + ' OR p.status = @param' + (params.length + 2) + ')';
+        params.push(status, vn);
+      } else {
+        query += ' AND p.status = @param' + (params.length + 1);
+        params.push(status);
+      }
     }
 
     // Search by title or content
@@ -121,7 +140,7 @@ static async findById(id) {
     }
 
     // Group by post_id
-  query += ' GROUP BY p.post_id, p.title, p.content, p.post_date, p.status, p.photo_urls, p.likes, p.comments_count, p.created_at, p.updated_at, p.user_id, u.name, u.email';
+  query += ' GROUP BY p.post_id, p.title, p.content, p.post_date, p.status, p.photo_urls, p.related_booking_id, p.likes, p.comments_count, p.created_at, p.updated_at, p.user_id, u.name, u.email';
 
     // Sorting
     query += ` ORDER BY p.${sortBy} ${sortOrder}`;
@@ -144,8 +163,19 @@ static async findById(id) {
       const countParams = [];
       
       if (status) {
-        countQuery += ' AND p.status = @param' + (countParams.length + 1);
-        countParams.push(status);
+        const vnMap = {
+          'Approved': 'Đã phê duyệt',
+          'Pending': 'Chờ xử lý',
+          'Rejected': 'Bị từ chối'
+        };
+        const vn = vnMap[status] || null;
+        if (vn) {
+          countQuery += ' AND (p.status = @param' + (countParams.length + 1) + ' OR p.status = @param' + (countParams.length + 2) + ')';
+          countParams.push(status, vn);
+        } else {
+          countQuery += ' AND p.status = @param' + (countParams.length + 1);
+          countParams.push(status);
+        }
       }
       
       if (search) {
@@ -183,14 +213,14 @@ static async findById(id) {
   static async findRecent(limit = 5) {
     const query = `
       SELECT TOP ${limit} p.*, u.name as author_name, u.email as author_email,
-             COUNT(DISTINCT pl.post_like_id) as likes_count,
-             COUNT(DISTINCT c.comment_id) as comments_count
+        COUNT(DISTINCT pl.post_like_id) as likes_count,
+        COUNT(DISTINCT CASE WHEN c.parent_comment_id IS NULL THEN c.comment_id END) as comments_count
       FROM Posts p
       LEFT JOIN Users u ON p.user_id = u.user_id
       LEFT JOIN PostLikes pl ON p.post_id = pl.post_id
       LEFT JOIN Comments c ON p.post_id = c.post_id
-      WHERE p.status = 'Approved'
-      GROUP BY p.post_id, p.title, p.content, p.post_date, p.status, p.photo_urls, p.likes, p.comments_count, p.created_at, p.updated_at, p.user_id, u.name, u.email
+  WHERE p.status IN ('Approved', N'Đã phê duyệt')
+      GROUP BY p.post_id, p.title, p.content, p.post_date, p.status, p.photo_urls, p.related_booking_id, p.likes, p.comments_count, p.created_at, p.updated_at, p.user_id, u.name, u.email
       ORDER BY p.post_date DESC
     `;
     
@@ -212,14 +242,14 @@ static async findById(id) {
   static async findPopular(limit = 5) {
     const query = `
       SELECT TOP ${limit} p.*, u.name as author_name, u.email as author_email,
-             COUNT(DISTINCT pl.post_like_id) as likes_count,
-             COUNT(DISTINCT c.comment_id) as comments_count
+        COUNT(DISTINCT pl.post_like_id) as likes_count,
+        COUNT(DISTINCT CASE WHEN c.parent_comment_id IS NULL THEN c.comment_id END) as comments_count
       FROM Posts p
       LEFT JOIN Users u ON p.user_id = u.user_id
       LEFT JOIN PostLikes pl ON p.post_id = pl.post_id
       LEFT JOIN Comments c ON p.post_id = c.post_id
-      WHERE p.status = 'Approved'
-      GROUP BY p.post_id, p.title, p.content, p.post_date, p.status, p.photo_urls, p.likes, p.comments_count, p.created_at, p.updated_at, p.user_id, u.name, u.email
+  WHERE p.status IN ('Approved', N'Đã phê duyệt')
+      GROUP BY p.post_id, p.title, p.content, p.post_date, p.status, p.photo_urls, p.related_booking_id, p.likes, p.comments_count, p.created_at, p.updated_at, p.user_id, u.name, u.email
       ORDER BY likes_count DESC, p.post_date DESC
     `;
     
@@ -240,7 +270,7 @@ static async findById(id) {
   // Cập nhật bài đăng
   async update(updateData) {
     const allowedFields = [
-      'title', 'content', 'status', 'photo_urls'
+      'title', 'content', 'status', 'photo_urls', 'related_booking_id'
     ];
     
     const updates = [];
@@ -288,7 +318,8 @@ static async findById(id) {
   // Lấy dịch vụ liên quan đến bài đăng
   async getServices() {
     const query = `
-      SELECT ps.*, s.name as name, s.description, v.specific_price, v.variant_name
+      SELECT ps.*, s.name as name, s.description,
+             v.specific_price, v.variant_name, v.price_min, v.price_max, v.unit
       FROM PostServices ps
       LEFT JOIN Services s ON ps.service_id = s.service_id
       LEFT JOIN ServiceVariants v ON ps.variant_id = v.variant_id
