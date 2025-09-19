@@ -2,14 +2,6 @@ const express = require('express');
 const router = express.Router();
 const taskerController = require('../controllers/taskerController');
 const { authenticateToken, requireAuth } = require('../middleware/auth');
-
-// GET /api/taskers
-router.get("/", taskerController.getAll);
-
-// GET /api/taskers/:id
-router.get("/:id", taskerController.getById);
-
-// Public search endpoint - no auth required
 router.post('/search-nearby', taskerController.searchNearbyUsers);
 
 
@@ -18,5 +10,11 @@ router.post('/address', authenticateToken, requireAuth, taskerController.createA
 router.get('/address', authenticateToken, requireAuth, taskerController.getAddressesByUserId);
 router.put('/address/:address_id', authenticateToken, requireAuth, taskerController.updateAddress);
 router.delete('/address/:address_id', authenticateToken, requireAuth, taskerController.deleteAddress);
+// GET /api/taskers
+router.get("/", taskerController.getAll);
+
+// GET /api/taskers/:id
+router.get("/:id", taskerController.getById);
+
 
 module.exports = router;

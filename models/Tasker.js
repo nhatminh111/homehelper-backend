@@ -8,7 +8,7 @@ class Tasker {
       SELECT 
         t.tasker_id,
         u.name AS tasker_name,
-        t.skills,
+        t.Introduce AS Introduce,
         t.certifications,
         t.status,
         ISNULL(r.avg_rating, 0) AS rating,
@@ -63,7 +63,7 @@ class Tasker {
           taskersMap[row.tasker_id] = {
             tasker_id: row.tasker_id,
             name: row.tasker_name,
-            skills: row.skills,
+            Introduce: row.Introduce,
             certifications: row.certifications,
             rating: parseFloat(row.rating),
             reviewsCount: row.reviewsCount,
@@ -111,7 +111,7 @@ class Tasker {
       const query = `
         SELECT *
         FROM Users
-        WHERE role = 'tasker' AND user_id = @param1
+        WHERE role = 'Tasker' AND user_id = @param1
       `;
       const result = await executeQuery(query, [id]);
       if (!result.recordset.length) return null;
