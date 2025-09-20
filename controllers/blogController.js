@@ -95,13 +95,17 @@ const getPostById = async (req, res) => {
 const createPost = async (req, res) => {
   try {
     const {
-      user_id,
+      user_id: body_user_id,
       title,
       content,
-      status = 'Chờ xử lý',
+      status = 'Pending',
+      related_booking_id = null,
       photo_urls = null,
       services = []
     } = req.body;
+
+    // Lấy user_id từ token nếu không truyền trong body
+    const user_id = body_user_id || (req.user && (req.user.userId || req.user.user_id));
 
     // Validate required fields
     if (!title || !content || !user_id) {
@@ -111,19 +115,44 @@ const createPost = async (req, res) => {
       });
     }
 
+    // Nội dung phải là HTML (đơn giản: cho phép mọi chuỗi, frontend đảm bảo HTML). Có thể thêm sanitize tại đây nếu cần.
+
     const postData = {
       user_id,
       title,
       content,
       status,
+      related_booking_id,
       photo_urls
     };
 
     const post = await Post.create(postData);
     
-    // Tạo post services nếu có
-    if (services && services.length > 0) {
+    // Nếu truyền services thủ công -> tạo theo danh sách
+    if (services && Array.isArray(services) && services.length > 0) {
       await PostService.createMultiple(post.post_id, services);
+    } else if (related_booking_id) {
+      // Không truyền services nhưng có liên kết booking -> tự tạo từ booking
+      try {
+        const bookingQuery = `
+          SELECT service_id, variant_id
+          FROM Bookings
+          WHERE booking_id = @param1
+        `;
+        const bookingResult = await executeQuery(bookingQuery, [related_booking_id]);
+        const booking = bookingResult.recordset && bookingResult.recordset[0];
+        if (booking && booking.service_id) {
+          await PostService.create({
+            post_id: post.post_id,
+            service_id: booking.service_id,
+            variant_id: booking.variant_id || null,
+            // desired_price có thể để null để PostService tự lấy specific_price nếu có variant
+          });
+        }
+      } catch (err) {
+        // Không fail toàn bộ post nếu lỗi khi gắn service từ booking
+        console.warn('Không thể gắn service từ booking cho post:', err.message);
+      }
     }
     
     res.status(201).json({

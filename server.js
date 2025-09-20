@@ -27,6 +27,9 @@ const io = new Server(server, {
   },
 });
 
+// Gắn io vào app để controller có thể lấy qua req.app.get('io')
+app.set('io', io);
+
 // Khởi tạo Socket Handler
 const socketHandler = new SocketHandler(io);
 

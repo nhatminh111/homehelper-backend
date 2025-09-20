@@ -16,6 +16,8 @@ class Services {
                                 sv.service_id,
                                 sv.variant_name,
                                 sv.pricing_type,
+                sv.price_min,
+                sv.price_max,
                                 sv.specific_price,
                                 sv.unit
                             FROM ServiceVariants sv
@@ -52,6 +54,8 @@ class Services {
                                 sv.service_id,
                                 sv.variant_name,
                                 sv.pricing_type,
+                sv.price_min,
+                sv.price_max,
                                 sv.specific_price,
                                 sv.unit
                             FROM ServiceVariants sv
